@@ -2151,10 +2151,9 @@ static bool torture_smb2_notify_close_after(struct torture_context *torture,
 	bool ret = true;
 	NTSTATUS status;
 	union smb_notify notify = {};
-	union smb_setfileinfo sfinfo = {};
 	union smb_open io = {};
-	struct smb2_handle h = {};
 	struct smb2_handle h1 = {};
+	struct smb2_handle h2 = {};
 	struct smb2_request *req;
 
 	torture_comment(torture, "TESTING NOTIFY CLOSE WHILE NOTIFY\n");
@@ -2180,17 +2179,17 @@ static bool torture_smb2_notify_close_after(struct torture_context *torture,
 
 	status = smb2_create(tree1, torture, &(io.smb2));
 	CHECK_STATUS(status, NT_STATUS_OK);
-	h = io.smb2.out.file.handle;
+	h1 = io.smb2.out.file.handle;
 
 	status = smb2_create(tree2, torture, &(io.smb2));
 	CHECK_STATUS(status, NT_STATUS_OK);
-	h1 = io.smb2.out.file.handle;
+	h2 = io.smb2.out.file.handle;
 
 	ZERO_STRUCT(notify.smb2);
 	notify.smb2.level = RAW_NOTIFY_SMB2;
 	notify.smb2.in.buffer_size = 1000;
 	notify.smb2.in.completion_filter = FILE_NOTIFY_CHANGE_NAME;
-	notify.smb2.in.file.handle = h;
+	notify.smb2.in.file.handle = h1;
 	notify.smb2.in.recursive = false;
 
 	io.smb2.in.desired_access |= SEC_STD_DELETE;
@@ -2198,18 +2197,19 @@ static bool torture_smb2_notify_close_after(struct torture_context *torture,
 	req = smb2_notify_send(tree1, &(notify.smb2));
 
 	smb_msleep(100);
-	smb2_util_close(tree1, h);
+	smb2_util_close(tree1, h1);
 
 	smb_msleep(500);
 	io.smb2.in.fname = BASEDIR "\\notifydir";
 	status = smb2_create(tree2, torture, &(io.smb2));
 	smb2_util_close(tree2, io.smb2.out.file.handle);
-	//status = smb2_notify_recv(req, torture, &(notify.smb2));
+	CHECK_STATUS(status, NT_STATUS_OK);
 	smb_msleep(30000);
+	(void) smb2_notify_recv(req, torture, &(notify.smb2));
 done:
 
-	smb2_util_close(tree1, h);
 	smb2_util_close(tree1, h1);
+	smb2_util_close(tree1, h2);
 	smb2_deltree(tree1, BASEDIR);
 
 	return ret;
